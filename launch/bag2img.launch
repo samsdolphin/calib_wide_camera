@@ -1,0 +1,7 @@
+<launch>
+  <node pkg="calib_wide_camera" type="bag2img" name="bag2img" output="screen">
+    <param name="bag_path" type="string" value="/media/sam/data/huawei_chunran/BR_3.bag"/>
+    <param name="write_path" type="string" value="/media/sam/data/huawei_chunran/img/"/>
+    <param name="topic_name" type="string" value="/Camera_BR"/>
+  </node>
+</launch>
