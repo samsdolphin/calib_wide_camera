@@ -54,5 +54,17 @@ target_link_libraries(vis ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 add_executable(comb_imu src/comb_imu.cpp)
 target_link_libraries(comb_imu ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
-add_executable(detect_aruco src/detect_aruco.cpp)
-target_link_libraries(detect_aruco ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} gtsam)
+add_executable(calib_aruco src/calib_aruco.cpp)
+target_link_libraries(calib_aruco ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} gtsam)
+
+add_executable(calib_aruco2 src/calib_aruco2.cpp)
+target_link_libraries(calib_aruco2 ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(calib_fishcam src/calib_fishcam.cpp)
+target_link_libraries(calib_fishcam ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} gtsam)
+
+# add_executable(test_aruco src/test_aruco.cpp)
+# target_link_libraries(test_aruco ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} gtsam)
+
+add_executable(valid_fishcam src/valid_fishcam.cpp)
+target_link_libraries(valid_fishcam ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
