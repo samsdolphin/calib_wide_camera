@@ -15,6 +15,7 @@
 #include <opencv2/aruco.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
+#include "ceres_residual.hpp"
 
 // #include <gtsam/geometry/Pose3.h>
 // #include <gtsam/slam/PriorFactor.h>
@@ -34,59 +35,12 @@ int img_num = 0;
 string single_cam_path = "/media/sam/CR7/20230613_shenzhen_rosbag/calib_aruco/";
 string twin_cam_path = "/media/sam/CR7/20230613_shenzhen_rosbag/calib_fishcam/";
 
-struct Camera
-{
-  int id;
-  Eigen::Matrix3d intrinsic;
-  Eigen::Vector4d distortion;
-  cv::Mat cv_intrinsic;
-  cv::Mat cv_distortion;
-};
-
-struct VPnPData
-{
-  Eigen::Vector3d p;
-  double u, v;
-};
-
-struct TagData
-{
-  double x, y, theta;
-};
-
-struct MarkerPair
-{
-  int image_id, ref_tag_id, cam_id1, cam_id2;
-  vector<int> marker_ids;
-  vector<vector<cv::Point2f>> marker_corners;
-  MarkerPair(int img_id_, int tag_id_, vector<int> mar_ids_, vector<vector<cv::Point2f>> corners_,
-             int cam_id1_ = -1, int cam_id2_ = -1)
-  {
-    cam_id1 = cam_id1_;
-    cam_id2 = cam_id2_;
-    image_id = img_id_;
-    ref_tag_id = tag_id_;
-    marker_ids = mar_ids_;
-    marker_corners = corners_;
-  }
-};
-
 vector<string> read_filenames(string filepath)
 {
   std::vector<std::string> result;
   for(const auto& entry: std::filesystem::directory_iterator(filepath))
     result.push_back(entry.path());
   return result;
-}
-
-template<typename Scalar>
-Eigen::Matrix<Scalar, 3, 3> R_theta(Scalar theta)
-{
-  Eigen::Matrix<Scalar, 3, 3> R;
-  R << cos(theta), -sin(theta), 0,
-       sin(theta), cos(theta), 0,
-       0, 0, 1;
-  return R;
 }
 
 /* 仅优化tag之间的外参 */
@@ -242,11 +196,11 @@ private:
   Camera camera_;
 };
 
-/* 仅优化tag系到相机系的外参 */
-class tag_twin_camera_residual
+/* 优化tag系到相机系的外参、相机外参、tag之间外参 */
+class twin_tag_twin_camera_residual
 {
 public:
-  tag_twin_camera_residual(VPnPData p, Camera camera) {p_ = p; camera_ = camera;}
+  twin_tag_twin_camera_residual(VPnPData p, Camera camera) {p_ = p; camera_ = camera;}
 
   template <typename T>
   bool operator()(const T* _q, const T* _t,
@@ -297,8 +251,8 @@ public:
   
   static ceres::CostFunction *Create(VPnPData p, Camera camera)
   {
-    return (new ceres::AutoDiffCostFunction<tag_twin_camera_residual, 2, 4, 3, 3, 3, 4, 3, 4, 3>(
-      new tag_twin_camera_residual(p, camera)));
+    return (new ceres::NumericDiffCostFunction<twin_tag_twin_camera_residual, ceres::CENTRAL, 2, 4, 3, 3, 3, 4, 3, 4, 3>(
+      new twin_tag_twin_camera_residual(p, camera)));
   }
 
 private:
@@ -391,11 +345,11 @@ void debug_camera(cv::Mat inputImage, Camera camera)
     final_qs[i] = m_q;
     final_ts[i] = m_t;
 
-    cout<<"marker id "<<markerIds[i]<<endl;
-    cout<<"final R"<<endl;
-    cout<<m_q.toRotationMatrix()<<endl;
-    cout<<"final t"<<endl;
-    cout<<m_t.transpose()<<endl;
+    // cout<<"marker id "<<markerIds[i]<<endl;
+    // cout<<"final R"<<endl;
+    // cout<<m_q.toRotationMatrix()<<endl;
+    // cout<<"final t"<<endl;
+    // cout<<m_t.transpose()<<endl;
 
     vector<cv::Point3f> pts_3d;
     pts_3d.push_back(cv::Point3f(0, 0, 0));
@@ -414,7 +368,7 @@ void debug_camera(cv::Mat inputImage, Camera camera)
     cv::fisheye::projectPoints(pts_3d, pts_2d, rvec, tvec, fisheye_cammatix, fisheye_distcoe);
     for(int j = 0; j < pts_2d.size(); j++)
     {
-      cv::circle(outputImage, pts_2d[j], 2, cv::Scalar(0, 0, 255), -1);
+      cv::circle(outputImage, pts_2d[j], 3, cv::Scalar(0, 0, 255), -1);
       res += cv::norm(markerCorners[i][j] - pts_2d[j]);
     }
   }
@@ -520,7 +474,7 @@ void init_tag_extrinsic(cv::Mat inputImage, Camera camera)
     cv::fisheye::projectPoints(pts_3d, pts_2d, rvec, tvec, fisheye_cammatix, fisheye_distcoe);
     for(int j = 0; j < pts_2d.size(); j++)
     {
-      // cv::circle(outputImage, pts_2d[j], 2, cv::Scalar(0, 0, 255), -1);
+      // cv::circle(outputImage, pts_2d[j], 3, cv::Scalar(0, 0, 255), -1);
       res += cv::norm(markerCorners[i][j] - pts_2d[j]);
     }
   }
@@ -631,7 +585,7 @@ MarkerPair add_residual(cv::Mat inputImage, Camera camera, ceres::Problem& probl
     cv::fisheye::projectPoints(pts_3d, pts_2d, rvec, tvec, fisheye_cammatix, fisheye_distcoe);
     for(int j = 0; j < pts_2d.size(); j++)
     {
-      // cv::circle(outputImage, pts_2d[j], 2, cv::Scalar(0, 0, 255), -1);
+      // cv::circle(outputImage, pts_2d[j], 3, cv::Scalar(0, 0, 255), -1);
       res += cv::norm(markerCorners[i][j] - pts_2d[j]);
     }
   }
@@ -705,7 +659,7 @@ MarkerPair add_residual(cv::Mat inputImage, Camera camera, ceres::Problem& probl
   return MarkerPair(img_num-1, ref_id, filtered_ids, filtered_corners);
 }
 
-MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera camera2, ceres::Problem& problem_)
+MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera camera2, ceres::Problem& problem_, bool debug = false)
 {
   cv::Mat outputImage = img1.clone();
   cv::Mat& fisheye_cammatix1 = camera1.cv_intrinsic;
@@ -725,23 +679,36 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
 
   Quaterniond init_qs, final_qs; // 只保存marker_id_0的外参
   Vector3d init_ts, final_ts;
+
+  int ref_id = -1; // 参考tag的id
+  int i_idx = -1;
+  for(int i = 0; i < markerIds.size(); i++)
+  {
+    if(markerIds[i] >= TOTAL_TAG_NUM) continue;
+    ref_id = markerIds[i];
+    i_idx = i;
+    break;
+  }
   
   cv::Matx33d rotationMatrix;
-  cv::Rodrigues(rvecs[0], rotationMatrix);
+  cv::Rodrigues(rvecs[i_idx], rotationMatrix);
 
   for(int j = 0; j < 3; j++)
   {
     for(int k = 0; k < 3; k++)
       rotation(j, k) = rotationMatrix(j, k);
-    translation(j) = tvecs[0](j);
+    translation(j) = tvecs[i_idx](j);
   }
   init_qs = Quaterniond(rotation);
   init_ts = Vector3d(translation(0), translation(1), translation(2));
 
   /* 优化marker_id_0到相机的外参 */
   double res = 0;
-  for(int i = 0; i < 1; i++)
+  
+  if(1)
   {
+    int i = i_idx;
+
     double ext[7] = {init_qs.x(), init_qs.y(), init_qs.z(), init_qs.w(), init_ts(0), init_ts(1), init_ts(2)}; // qx, qy, qz, qw, tx, ty, tz
 
     vector<VPnPData> vpnp_data(4);
@@ -795,12 +762,13 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
     cv::fisheye::projectPoints(pts_3d, pts_2d, rvec, tvec, fisheye_cammatix1, fisheye_distcoe1);
     for(int j = 0; j < pts_2d.size(); j++)
     {
-      // cv::circle(outputImage, pts_2d[j], 2, cv::Scalar(0, 0, 255), -1);
+      // cv::circle(outputImage, pts_2d[j], 3, cv::Scalar(0, 0, 255), -1);
       res += cv::norm(markerCorners[i][j] - pts_2d[j]);
     }
   }
   // res /= markerCorners.size()*4;
   // cout<<"image "<<img_num<<" average reprojection error (pixel): "<<res<<endl;
+  // cout<<"ref id "<<ref_id<<endl;
   // cv::imwrite(single_cam_path + to_string(img_num) + "_" + to_string(res) + ".png", outputImage);
 
   /* 这张图片和相机外参，参考tag是识别的第一个tag */
@@ -812,8 +780,6 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
   img_ext[7*img_num+4] = final_ts(0);
   img_ext[7*img_num+5] = final_ts(1);
   img_ext[7*img_num+6] = final_ts(2);
-
-  int ref_id = markerIds[0]; // 参考tag的id
 
   #ifndef CALIB_TAG_ONLY
   ceres::LocalParameterization *q_parameterization = new ceres::EigenQuaternionParameterization();
@@ -827,7 +793,6 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
   for(int i = 0; i < markerCorners.size(); i++)
   {
     if(markerIds[i] >= TOTAL_TAG_NUM) continue;
-
     vector<VPnPData> vpnp_data(4);
     vpnp_data[0].p = Eigen::Vector3d(0, 0, 0); vpnp_data[0].u = markerCorners[i][0].x; vpnp_data[0].v = markerCorners[i][0].y;
     vpnp_data[1].p = Eigen::Vector3d(0.15, 0, 0); vpnp_data[1].u = markerCorners[i][1].x; vpnp_data[1].v = markerCorners[i][1].y;
@@ -889,21 +854,26 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
     if(markerIds2[i] == ref_id)
       for(int j = 0; j < 4; j++)
       {
-        cout<<"DO SOMETHING"<<endl;
+        ceres::CostFunction *cost_function;
+        cost_function = single_tag_twin_camera_residual::Create(vpnp_data[j], camera2);
+        problem_.AddResidualBlock(cost_function, NULL,
+                                  img_ext+7*img_num, img_ext+7*img_num+4, // tag系到cam1系的外参
+                                  cam_ext+camera1.id*7, cam_ext+camera1.id*7+4, // cam1的位姿
+                                  cam_ext+camera2.id*7, cam_ext+camera2.id*7+4); // cam2的位姿
       }
     else
     {
       int cur_id = markerIds2[i];
       for(int j = 0; j < 4; j++)
       {
-        // ceres::CostFunction *cost_function;
-        // cost_function = tag_twin_camera_residual::Create(vpnp_data[j], camera2);
-        // problem_.AddResidualBlock(cost_function, NULL,
-        //                           img_ext+7*img_num, img_ext+7*img_num+4, // tag系到cam1系的外参
-        //                           tag_ext+3*ref_id, // ref_tag的外参
-        //                           tag_ext+3*cur_id, // 当前tag的外参
-        //                           cam_ext+camera1.id*7, cam_ext+camera1.id*7+4, // cam1的位姿
-        //                           cam_ext+camera2.id*7, cam_ext+camera2.id*7+4); // cam2的位姿
+        ceres::CostFunction *cost_function;
+        cost_function = twin_tag_twin_camera_residual::Create(vpnp_data[j], camera2);
+        problem_.AddResidualBlock(cost_function, NULL,
+                                  img_ext+7*img_num, img_ext+7*img_num+4, // tag系到cam1系的外参
+                                  tag_ext+3*ref_id, // ref_tag的外参
+                                  tag_ext+3*cur_id, // 当前tag的外参
+                                  cam_ext+camera1.id*7, cam_ext+camera1.id*7+4, // cam1的位姿
+                                  cam_ext+camera2.id*7, cam_ext+camera2.id*7+4); // cam2的位姿
       }
     }
     filtered_corners2.push_back(markerCorners2[i]);
@@ -912,7 +882,6 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
 
   img_num++;
   return MarkerPair(img_num-1, ref_id, filtered_ids2, filtered_corners2, camera1.id, camera2.id);
-  // return MarkerPair(img_num-1, ref_id, filtered_ids, filtered_corners);
 }
 
 void calculate_reprojection_err(cv::Mat inputImage, Camera camera, MarkerPair marker_pair)
@@ -932,12 +901,18 @@ void calculate_reprojection_err(cv::Mat inputImage, Camera camera, MarkerPair ma
   Eigen::Map<Eigen::Quaterniond> m_q = Eigen::Map<Eigen::Quaterniond>(img_ext+7*img_id);
   Eigen::Map<Eigen::Vector3d> m_t = Eigen::Map<Eigen::Vector3d>(img_ext+7*img_id + 4);
 
+  // cout<<"here "<<m_q.x()<<" "<<m_q.y()<<" "<<m_q.z()<<" "<<m_q.w()<<endl;
+  // cout<<"here "<<m_t(0)<<" "<<m_t(1)<<" "<<m_t(2)<<endl;
+
   double res = 0;
   for(int i = 0; i < markerIds.size(); i++)
   {
     int cur_id = markerIds[i];
+    // cout<<"cur id "<<cur_id<<endl;
     Eigen::Matrix3d new_R = R0.transpose()*R_theta(tag_ext[cur_id*3+2]);
     Eigen::Vector3d new_t = R0.transpose()*(Eigen::Vector3d(tag_ext[cur_id*3], tag_ext[cur_id*3+1], 0)-t0);
+    // cout<<"new_R "<<new_R<<endl;
+    // cout<<"new_t "<<new_t<<endl;
 
     vector<cv::Point3f> pts_3d;
     Eigen::Vector3d t_tmp;
@@ -962,7 +937,7 @@ void calculate_reprojection_err(cv::Mat inputImage, Camera camera, MarkerPair ma
     cv::fisheye::projectPoints(pts_3d, pts_2d, rvec, tvec, fisheye_cammatix, fisheye_distcoe);
     for(int j = 0; j < pts_2d.size(); j++)
     {
-      cv::circle(outputImage, pts_2d[j], 2, cv::Scalar(0, 0, 255), -1);
+      cv::circle(outputImage, pts_2d[j], 3, cv::Scalar(0, 0, 255), -1);
       res += cv::norm(markerCorners[i][j] - pts_2d[j]);
     }
   }
@@ -999,46 +974,34 @@ void calculate_twin_reprojection_err(cv::Mat inputImage, Camera camera, MarkerPa
   Eigen::Matrix3d delta_cam_R = q_cam2.toRotationMatrix().transpose() * q_cam1.toRotationMatrix();
   Eigen::Vector3d delta_cam_t = q_cam2.toRotationMatrix().transpose() * (t_cam1 - t_cam2);
 
-  // cout<<"delta_cam_R: "<<endl<<delta_cam_R<<endl;
-  // cout<<"delta_cam_t: "<<endl<<delta_cam_t<<endl;
-
   double res = 0;
   for(int i = 0; i < markerIds.size(); i++)
   {
     int cur_id = markerIds[i];
-    Eigen::Matrix3d new_R = R0.transpose()*R_theta(tag_ext[cur_id*3+2]);
-    Eigen::Vector3d new_t = R0.transpose()*(Eigen::Vector3d(tag_ext[cur_id*3], tag_ext[cur_id*3+1], 0)-t0);
+    Eigen::Matrix3d delta_tag_R = R0.transpose()*R_theta(tag_ext[cur_id*3+2]);
+    Eigen::Vector3d delta_tag_t = R0.transpose()*(Eigen::Vector3d(tag_ext[cur_id*3], tag_ext[cur_id*3+1], 0)-t0);
 
     vector<cv::Point3f> pts_3d;
-    Eigen::Vector3d t_tmp;
-    t_tmp = new_R * Eigen::Vector3d(0, 0, 0) + new_t;
-    pts_3d.push_back(cv::Point3f(t_tmp(0), t_tmp(1), t_tmp(2)));
-    t_tmp = new_R * Eigen::Vector3d(0.15, 0, 0) + new_t;
-    pts_3d.push_back(cv::Point3f(t_tmp(0), t_tmp(1), t_tmp(2)));
-    t_tmp = new_R * Eigen::Vector3d(0.15, -0.15, 0) + new_t;
-    pts_3d.push_back(cv::Point3f(t_tmp(0), t_tmp(1), t_tmp(2)));
-    t_tmp = new_R * Eigen::Vector3d(0, -0.15, 0) + new_t;
-    pts_3d.push_back(cv::Point3f(t_tmp(0), t_tmp(1), t_tmp(2)));
+    pts_3d.push_back(cv::Point3f(0, 0, 0));
+    pts_3d.push_back(cv::Point3f(0.15, 0, 0));
+    pts_3d.push_back(cv::Point3f(0.15, -0.15, 0));
+    pts_3d.push_back(cv::Point3f(0, -0.15, 0));
     
     std::vector<cv::Point2f> pts_2d;
-    Eigen::Matrix3d rotation = delta_cam_R * m_q.toRotationMatrix();
-    cout<<"my R"<<endl;
-    cout<<rotation * new_R<<endl;
-    cout<<"my t"<<endl;
-    cout<<delta_cam_R * (m_q.toRotationMatrix() * new_t + m_t) + delta_cam_t<<endl;
-    cout<<delta_cam_R * (m_q.toRotationMatrix() * new_t) + delta_cam_t<<endl;
+    Eigen::Matrix3d rotation = delta_cam_R * m_q.toRotationMatrix() * delta_tag_R;
+    Eigen::Vector3d my_t = delta_cam_R * (m_q.toRotationMatrix() * delta_tag_t + m_t) + delta_cam_t;
+
     cv::Mat R = (cv::Mat_<double>(3,3) <<
       rotation(0, 0), rotation(0, 1), rotation(0, 2),
       rotation(1, 0), rotation(1, 1), rotation(1, 2),
       rotation(2, 0), rotation(2, 1), rotation(2, 2));
     cv::Mat rvec;
     cv::Rodrigues(R, rvec);
-    m_t = delta_cam_R * m_t + delta_cam_t;
-    cv::Mat tvec = (cv::Mat_<double>(3, 1) << m_t(0), m_t(1), m_t(2));
+    cv::Mat tvec = (cv::Mat_<double>(3, 1) << my_t(0), my_t(1), my_t(2));
     cv::fisheye::projectPoints(pts_3d, pts_2d, rvec, tvec, fisheye_cammatix, fisheye_distcoe);
     for(int j = 0; j < pts_2d.size(); j++)
     {
-      cv::circle(outputImage, pts_2d[j], 2, cv::Scalar(0, 0, 255), -1);
+      cv::circle(outputImage, pts_2d[j], 3, cv::Scalar(0, 0, 255), -1);
       res += cv::norm(markerCorners[i][j] - pts_2d[j]);
     }
   }
@@ -1169,6 +1132,17 @@ int main()
     marker_pairs.push_back(marker_pair);
   }
 
+  cout<<"add fr-bl pair residual"<<endl;
+  vector<string> frbl_img_names = read_filenames(twin_cam_path + "fr_bl/fr/");
+  vector<string> blfr_img_names = read_filenames(twin_cam_path + "fr_bl/bl/");
+  for(int i = 0; i < frbl_img_names.size(); i++)
+  {
+    cv::Mat img1 = cv::imread(frbl_img_names[i]);
+    cv::Mat img2 = cv::imread(blfr_img_names[i]);
+    MarkerPair marker_pair = add_twin_residual(img1, img2, cameras[0], cameras[1], problem);
+    twin_marker_pairs.push_back(marker_pair);
+  }
+
   cout<<"add bl-fl pair residual"<<endl;
   vector<string> blfl_img_names = read_filenames(twin_cam_path + "bl_fl/bl/");
   vector<string> flbl_img_names = read_filenames(twin_cam_path + "bl_fl/fl/");
@@ -1178,12 +1152,29 @@ int main()
     cv::Mat img2 = cv::imread(flbl_img_names[i]);
     MarkerPair marker_pair = add_twin_residual(img1, img2, cameras[1], cameras[2], problem);
     twin_marker_pairs.push_back(marker_pair);
-    // MarkerPair marker_pair = add_residual(img1, img2, cameras[1], cameras[2], problem);
-    // marker_pairs.push_back(marker_pair);
   }
 
-  cv::Mat debug_img = cv::imread(flbl_img_names[0]);
-  debug_camera(debug_img, cameras[2]);
+  cout<<"add fl-br pair residual"<<endl;
+  vector<string> flbr_img_names = read_filenames(twin_cam_path + "fl_br/fl/");
+  vector<string> brfl_img_names = read_filenames(twin_cam_path + "fl_br/br/");
+  for(int i = 0; i < flbr_img_names.size(); i++)
+  {
+    cv::Mat img1 = cv::imread(flbr_img_names[i]);
+    cv::Mat img2 = cv::imread(brfl_img_names[i]);
+    MarkerPair marker_pair = add_twin_residual(img1, img2, cameras[2], cameras[3], problem);
+    twin_marker_pairs.push_back(marker_pair);
+  }
+
+  cout<<"add br-fr pair residual"<<endl;
+  vector<string> brfr_img_names = read_filenames(twin_cam_path + "br_fr/br/");
+  vector<string> frbr_img_names = read_filenames(twin_cam_path + "br_fr/fr/");
+  for(int i = 0; i < brfr_img_names.size(); i++)
+  {
+    cv::Mat img1 = cv::imread(brfr_img_names[i]);
+    cv::Mat img2 = cv::imread(frbr_img_names[i]);
+    MarkerPair marker_pair = add_twin_residual(img1, img2, cameras[3], cameras[0], problem);
+    twin_marker_pairs.push_back(marker_pair);
+  }
   
   ceres::Solver::Options options;
   options.preconditioner_type = ceres::JACOBI;
@@ -1194,13 +1185,32 @@ int main()
   ceres::Solver::Summary summary;
   ceres::Solve(options, &problem, &summary);
 
-  for(int i = 0; i < flbl_img_names.size(); i++)
+  int twin_idx = 0;
+  for(int i = 0; i < blfr_img_names.size(); i++)
   {
-    inputImage = cv::imread(flbl_img_names[i]);
+    inputImage = cv::imread(blfr_img_names[i]);
+    calculate_twin_reprojection_err(inputImage, cameras[1], twin_marker_pairs[i]);
+  }
+  twin_idx += blfr_img_names.size();
+
+  for(int i = twin_idx; i < flbl_img_names.size()+twin_idx; i++)
+  {
+    inputImage = cv::imread(flbl_img_names[i-twin_idx]);
     calculate_twin_reprojection_err(inputImage, cameras[2], twin_marker_pairs[i]);
-    exit(0);
-    // inputImage = cv::imread(blfl_img_names[i]);
-    // calculate_reprojection_err(inputImage, cameras[1], twin_marker_pairs[i]);
+  }
+  twin_idx += flbl_img_names.size();
+
+  for(int i = twin_idx; i < brfl_img_names.size()+twin_idx; i++)
+  {
+    inputImage = cv::imread(brfl_img_names[i-twin_idx]);
+    calculate_twin_reprojection_err(inputImage, cameras[3], twin_marker_pairs[i]);
+  }
+  twin_idx += brfl_img_names.size();
+
+  for(int i = twin_idx; i < frbr_img_names.size()+twin_idx; i++)
+  {
+    inputImage = cv::imread(frbr_img_names[i-twin_idx]);
+    calculate_twin_reprojection_err(inputImage, cameras[0], twin_marker_pairs[i]);
   }
 
   // int idx = 0;
@@ -1242,4 +1252,22 @@ int main()
   //   cout<<new_R<<endl;
   //   cout<<new_t.transpose()<<endl;
   // }
+  Eigen::Map<Eigen::Quaterniond> q_cam1 = Eigen::Map<Eigen::Quaterniond>(cam_ext); // camera1的外参
+  Eigen::Map<Eigen::Vector3d> t_cam1 = Eigen::Map<Eigen::Vector3d>(cam_ext + 4);
+
+  for(int i = 1; i < 4; i++)
+  {
+    Eigen::Map<Eigen::Quaterniond> q_cam2 = Eigen::Map<Eigen::Quaterniond>(cam_ext+7*i); // camera2的外参
+    Eigen::Map<Eigen::Vector3d> t_cam2 = Eigen::Map<Eigen::Vector3d>(cam_ext+7*i + 4);
+
+    Eigen::Matrix3d delta_cam_R = q_cam1.toRotationMatrix().transpose() * q_cam2.toRotationMatrix();
+    Eigen::Vector3d delta_cam_t = q_cam1.toRotationMatrix().transpose() * (t_cam2 - t_cam1);
+
+    cout<<"cam "<<i<<endl;
+    cout<<delta_cam_R(0, 0)<<","<<delta_cam_R(0, 1)<<","<<delta_cam_R(0, 2)<<","<<endl;
+    cout<<delta_cam_R(1, 0)<<","<<delta_cam_R(1, 1)<<","<<delta_cam_R(1, 2)<<","<<endl;
+    cout<<delta_cam_R(2, 0)<<","<<delta_cam_R(2, 1)<<","<<delta_cam_R(2, 2)<<endl;
+    cout<<delta_cam_t(0)<<","<<delta_cam_t(1)<<","<<delta_cam_t(2)<<endl;
+  }
+  
 }
