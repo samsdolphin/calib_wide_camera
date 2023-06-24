@@ -8,6 +8,7 @@
 
 #include <Eigen/Dense>
 #include "ceres/ceres.h"
+#include "ceres/loss_function.h"
 
 #include <sensor_msgs/Image.h>
 #include <cv_bridge/cv_bridge.h>
@@ -31,6 +32,7 @@ using namespace std;
 using namespace Eigen;
 
 int img_num = 0;
+ceres::LossFunction* loss_function;
 
 string single_cam_path = "/media/sam/CR7/20230613_shenzhen_rosbag/calib_aruco/";
 string twin_cam_path = "/media/sam/CR7/20230613_shenzhen_rosbag/calib_fishcam/";
@@ -262,7 +264,7 @@ private:
 
 /*每个tag和tag0的外参*/
 double tag_ext[3*TOTAL_TAG_NUM];
-double img_ext[7*32]; // 前16是单相机位姿，后16是相机对的位姿
+double img_ext[7*31]; // 前16是单相机位姿，后16是相机对的位姿
 double cam_ext[7*4];
 
 void debug_camera(cv::Mat inputImage, Camera camera)
@@ -630,7 +632,7 @@ MarkerPair add_residual(cv::Mat inputImage, Camera camera, ceres::Problem& probl
         #ifndef CALIB_TAG_ONLY
         ceres::CostFunction *cost_function;
         cost_function = tag_camera_residual::Create(vpnp_data[j], camera);
-        problem_.AddResidualBlock(cost_function, NULL, img_ext+7*img_num, img_ext+7*img_num+4);
+        problem_.AddResidualBlock(cost_function, new ceres::HuberLoss(0.1), img_ext+7*img_num, img_ext+7*img_num+4);
         #endif
       }
     else
@@ -644,10 +646,11 @@ MarkerPair add_residual(cv::Mat inputImage, Camera camera, ceres::Problem& probl
                                                  TagData{tag_ext[ref_id*3], tag_ext[ref_id*3+1], tag_ext[ref_id*3+2]},
                                                  TagData{tag_ext[cur_id*3], tag_ext[cur_id*3+1], tag_ext[cur_id*3+2]},
                                                  final_qs[0], final_ts[0], camera);
-        problem_.AddResidualBlock(cost_function, NULL, tag_ext + 3*ref_id, tag_ext + 3*cur_id);
+        problem_.AddResidualBlock(cost_function, new ceres::HuberLoss(0.1), tag_ext + 3*ref_id, tag_ext + 3*cur_id);
         #else
         cost_function = tag_cam_ext_residual::Create(vpnp_data[j], camera);
-        problem_.AddResidualBlock(cost_function, NULL, img_ext+7*img_num, img_ext+7*img_num+4, tag_ext+3*ref_id, tag_ext+3*cur_id);
+        problem_.AddResidualBlock(cost_function, new ceres::HuberLoss(0.1),
+                                  img_ext+7*img_num, img_ext+7*img_num+4, tag_ext+3*ref_id, tag_ext+3*cur_id);
         #endif
       }
     }
@@ -805,7 +808,7 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
         #ifndef CALIB_TAG_ONLY
         ceres::CostFunction *cost_function;
         cost_function = tag_camera_residual::Create(vpnp_data[j], camera1);
-        problem_.AddResidualBlock(cost_function, NULL, img_ext+7*img_num, img_ext+7*img_num+4);
+        problem_.AddResidualBlock(cost_function, new ceres::HuberLoss(0.1), img_ext+7*img_num, img_ext+7*img_num+4);
         #endif
       }
     else
@@ -819,10 +822,11 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
                                                  TagData{tag_ext[ref_id*3], tag_ext[ref_id*3+1], tag_ext[ref_id*3+2]},
                                                  TagData{tag_ext[cur_id*3], tag_ext[cur_id*3+1], tag_ext[cur_id*3+2]},
                                                  final_qs[0], final_ts[0], camera1);
-        problem_.AddResidualBlock(cost_function, NULL, tag_ext + 3*ref_id, tag_ext + 3*cur_id);
+        problem_.AddResidualBlock(cost_function, new ceres::HuberLoss(0.1), tag_ext + 3*ref_id, tag_ext + 3*cur_id);
         #else
         cost_function = tag_cam_ext_residual::Create(vpnp_data[j], camera1);
-        problem_.AddResidualBlock(cost_function, NULL, img_ext+7*img_num, img_ext+7*img_num+4, tag_ext+3*ref_id, tag_ext+3*cur_id);
+        problem_.AddResidualBlock(cost_function, new ceres::HuberLoss(0.1),
+                                  img_ext+7*img_num, img_ext+7*img_num+4, tag_ext+3*ref_id, tag_ext+3*cur_id);
         #endif
       }
     }
@@ -856,7 +860,7 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
       {
         ceres::CostFunction *cost_function;
         cost_function = single_tag_twin_camera_residual::Create(vpnp_data[j], camera2);
-        problem_.AddResidualBlock(cost_function, NULL,
+        problem_.AddResidualBlock(cost_function, new ceres::HuberLoss(0.1),
                                   img_ext+7*img_num, img_ext+7*img_num+4, // tag系到cam1系的外参
                                   cam_ext+camera1.id*7, cam_ext+camera1.id*7+4, // cam1的位姿
                                   cam_ext+camera2.id*7, cam_ext+camera2.id*7+4); // cam2的位姿
@@ -868,7 +872,7 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
       {
         ceres::CostFunction *cost_function;
         cost_function = twin_tag_twin_camera_residual::Create(vpnp_data[j], camera2);
-        problem_.AddResidualBlock(cost_function, NULL,
+        problem_.AddResidualBlock(cost_function, new ceres::HuberLoss(0.1),
                                   img_ext+7*img_num, img_ext+7*img_num+4, // tag系到cam1系的外参
                                   tag_ext+3*ref_id, // ref_tag的外参
                                   tag_ext+3*cur_id, // 当前tag的外参
@@ -1081,6 +1085,7 @@ int main()
   init_tag_extrinsic(inputImage, cameras[0]);
 
   ceres::Problem problem;
+  loss_function = new ceres::HuberLoss(0.1);
   for(int i = 0; i < TOTAL_TAG_NUM; i++)
     problem.AddParameterBlock(tag_ext + 3*i, 3);
   for(int i = 0; i < 4; i++)
@@ -1213,34 +1218,33 @@ int main()
     calculate_twin_reprojection_err(inputImage, cameras[0], twin_marker_pairs[i]);
   }
 
-  // int idx = 0;
-  // for(int i = 0; i < fr_img_names.size(); i++)
-  // {
-  //   inputImage = cv::imread(fr_img_names[i]);
-  //   calculate_reprojection_err(inputImage, cameras[0], marker_pairs[i]);
-  // }
-  // idx += fr_img_names.size();
+  int idx = 0;
+  for(int i = 0; i < fr_img_names.size(); i++)
+  {
+    inputImage = cv::imread(fr_img_names[i]);
+    calculate_reprojection_err(inputImage, cameras[0], marker_pairs[i]);
+  }
+  idx += fr_img_names.size();
 
-  // for(int i = idx; i < bl_img_names.size()+idx; i++)
-  // {
-  //   inputImage = cv::imread(bl_img_names[i-idx]);
-  //   calculate_reprojection_err(inputImage, cameras[1], marker_pairs[i]);
-  // }
-  // idx += bl_img_names.size();
+  for(int i = idx; i < bl_img_names.size()+idx; i++)
+  {
+    inputImage = cv::imread(bl_img_names[i-idx]);
+    calculate_reprojection_err(inputImage, cameras[1], marker_pairs[i]);
+  }
+  idx += bl_img_names.size();
 
-  // for(int i = idx; i < fl_img_names.size()+idx; i++)
-  // {
-  //   inputImage = cv::imread(fl_img_names[i-idx]);
-  //   calculate_reprojection_err(inputImage, cameras[2], marker_pairs[i]);
-  // }
-  // idx += fl_img_names.size();
+  for(int i = idx; i < fl_img_names.size()+idx; i++)
+  {
+    inputImage = cv::imread(fl_img_names[i-idx]);
+    calculate_reprojection_err(inputImage, cameras[2], marker_pairs[i]);
+  }
+  idx += fl_img_names.size();
 
-  // for(int i = idx; i < br_img_names.size()+idx; i++)
-  // {
-  //   inputImage = cv::imread(br_img_names[i-idx]);
-  //   calculate_reprojection_err(inputImage, cameras[3], marker_pairs[i]);
-  // }
-  // idx += br_img_names.size();
+  for(int i = idx; i < br_img_names.size()+idx; i++)
+  {
+    inputImage = cv::imread(br_img_names[i-idx]);
+    calculate_reprojection_err(inputImage, cameras[3], marker_pairs[i]);
+  }
 
   // Eigen::Matrix3d R0 = R_theta(tag_ext[0*3+2]);
   // Eigen::Vector3d t0(tag_ext[0*3], tag_ext[0*3+1], 0);

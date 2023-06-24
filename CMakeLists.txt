@@ -58,7 +58,7 @@ add_executable(calib_aruco src/calib_aruco.cpp)
 target_link_libraries(calib_aruco ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} gtsam)
 
 add_executable(calib_aruco2 src/calib_aruco2.cpp)
-target_link_libraries(calib_aruco2 ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(calib_aruco2 ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})
 
 add_executable(calib_fishcam src/calib_fishcam.cpp)
 target_link_libraries(calib_fishcam ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} gtsam)

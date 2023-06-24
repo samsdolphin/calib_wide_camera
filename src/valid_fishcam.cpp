@@ -16,7 +16,7 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
-#define COLOR_EACH_CAMERA
+// #define COLOR_EACH_CAMERA
 
 using namespace std;
 using namespace Eigen;
@@ -87,7 +87,8 @@ int main(int argc, char** argv)
   ros::Publisher pub_bl_cloud = nh.advertise<sensor_msgs::PointCloud2>("/bl_cloud", 100);
 
   pcl::PointCloud<pcl::PointXYZI>::Ptr lidar_cloud(new pcl::PointCloud<pcl::PointXYZI>);
-  pcl::io::loadPCDFile<pcl::PointXYZI>("/media/sam/CR7/20230613_shenzhen_rosbag/calib_fishcam/lidarcloud.pcd", *lidar_cloud);
+  // pcl::io::loadPCDFile<pcl::PointXYZI>("/media/sam/CR7/20230613_shenzhen_rosbag/calib_fishcam/lidarcloud.pcd", *lidar_cloud);
+  pcl::io::loadPCDFile<pcl::PointXYZI>("/media/sam/CR7/20230613_shenzhen_rosbag/calib_fishcam/seg_cloud.pcd", *lidar_cloud);
 
   cv::Mat fr_intrinsic, fr_coef, bl_intrinsic, bl_coef, fl_intrinsic, fl_coef, br_intrinsic, br_coef;
 
@@ -116,9 +117,23 @@ int main(int argc, char** argv)
   bl_coef = (cv::Mat_<double>(1, 4) << 0.000413327, -0.017352, 0.0175895, -0.0110053);
 
   Eigen::Matrix3d R_cam_FR;
-  R_cam_FR << -0.999993,0.00230445,-0.00295025,
-              -0.00295462,-0.00189582,0.999994,
-              0.00229884,0.999996,0.00190261;
+  // R_cam_FR << -0.999993,0.00230445,-0.00295025,
+  //             -0.00295462,-0.00189582,0.999994,
+  //             0.00229884,0.999996,0.00190261;
+  R_cam_FR << -0.999945,0.00959329,0.00433914,
+              0.00427251,-0.00695479,0.999967,
+              0.00962315,0.99993,0.00691342;
+  Eigen::Matrix3d delta_xR, delta_yR, delta_zR;
+  delta_xR << 1.0000000,  0.0000000,  0.0000000,
+              0.0000000,  0.9999985,  0.0017453,
+              0.0000000, -0.0017453,  0.9999985;
+  delta_yR << 0.9999863,  0.0000000, -0.0052360,
+              0.0000000,  1.0000000,  0.0000000,
+              0.0052360,  0.0000000,  0.9999863;
+  delta_zR << 0.9999756, -0.0069813,  0.0000000,
+              0.0069813,  0.9999756,  0.0000000,
+              0.0000000,  0.0000000,  1.0000000;
+  R_cam_FR = delta_xR*delta_zR*delta_yR*R_cam_FR;
   Eigen::Vector3d t_cam_FR(0.0695, 0.06885, -0.0765);
 
   Eigen::Matrix3d R_cam_BR;
