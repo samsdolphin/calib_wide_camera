@@ -117,12 +117,12 @@ int main(int argc, char** argv)
   bl_coef = (cv::Mat_<double>(1, 4) << 0.000413327, -0.017352, 0.0175895, -0.0110053);
 
   Eigen::Matrix3d R_cam_FR;
-  // R_cam_FR << -0.999993,0.00230445,-0.00295025,
-  //             -0.00295462,-0.00189582,0.999994,
-  //             0.00229884,0.999996,0.00190261;
-  R_cam_FR << -0.999945,0.00959329,0.00433914,
-              0.00427251,-0.00695479,0.999967,
-              0.00962315,0.99993,0.00691342;
+  R_cam_FR << -0.999998,0.00172306,-0.000316029,
+              -0.00032462,-0.0049878,0.999988,
+              0.00172146,0.999986,0.00498835;
+  // R_cam_FR << -0.999945,0.00959329,0.00433914,
+  //             0.00427251,-0.00695479,0.999967,
+  //             0.00962315,0.99993,0.00691342; // good
   Eigen::Matrix3d delta_xR, delta_yR, delta_zR;
   delta_xR << 1.0000000,  0.0000000,  0.0000000,
               0.0000000,  0.9999985,  0.0017453,
@@ -133,7 +133,7 @@ int main(int argc, char** argv)
   delta_zR << 0.9999756, -0.0069813,  0.0000000,
               0.0069813,  0.9999756,  0.0000000,
               0.0000000,  0.0000000,  1.0000000;
-  R_cam_FR = delta_xR*delta_zR*delta_yR*R_cam_FR;
+  // R_cam_FR = delta_xR * delta_zR * delta_yR * R_cam_FR;
   Eigen::Vector3d t_cam_FR(0.0695, 0.06885, -0.0765);
 
   Eigen::Matrix3d R_cam_BR;
@@ -143,9 +143,6 @@ int main(int argc, char** argv)
   Eigen::Vector3d t_cam_BR(0.0165, 0.06885, -0.1256);
 
   Eigen::Matrix3d R_cam_BL;
-  // R_cam_BL << 0.000562243,0.999999,-0.000832109,
-  //             -0.00201167,0.000833239,0.999998,
-  //             0.999998,-0.000560567,0.00201213;
   R_cam_BL << -0.000364663,0.999965,-0.00841718,
               -0.00343528,0.00841588,0.999959,
               0.999994,0.000393563,0.00343209;
@@ -186,6 +183,10 @@ int main(int argc, char** argv)
   getchar();
   cv::Mat input_img = cv::imread("/media/sam/CR7/20230613_shenzhen_rosbag/calib_fishcam/fr.png", cv::IMREAD_UNCHANGED);
   color_cloud(fr_intrinsic, fr_coef, input_img, R_cam_FR, t_cam_FR, lidar_cloud, rgb_cloud);
+  
+  cout<<"FR"<<endl;
+  cout<<R_cam_FR<<endl;
+  cout<<t_cam_FR.transpose()<<endl;
 
   sensor_msgs::PointCloud2 cloudMsg;
   pcl::toROSMsg(*rgb_cloud, cloudMsg);
@@ -206,6 +207,10 @@ int main(int argc, char** argv)
   cloudMsg.header.stamp = ros::Time::now();
   pub_bl_cloud.publish(cloudMsg);
 
+  cout<<"BL"<<endl;
+  cout<<R_FR_BL.transpose()*R_cam_FR<<endl;
+  cout<<(R_FR_BL.transpose()*(t_cam_FR-t_FR_BL)).transpose()<<endl;
+
   cout<<"push enter"<<endl;
   getchar();
   input_img = cv::imread("/media/sam/CR7/20230613_shenzhen_rosbag/calib_fishcam/br.png", cv::IMREAD_UNCHANGED);
@@ -219,6 +224,10 @@ int main(int argc, char** argv)
   cloudMsg.header.stamp = ros::Time::now();
   pub_br_cloud.publish(cloudMsg);
 
+  cout<<"BR"<<endl;
+  cout<<R_FR_BR.transpose()*R_cam_FR<<endl;
+  cout<<(R_FR_BR.transpose()*(t_cam_FR-t_FR_BR)).transpose()<<endl;
+
   cout<<"push enter"<<endl;
   getchar();
   input_img = cv::imread("/media/sam/CR7/20230613_shenzhen_rosbag/calib_fishcam/fl.png", cv::IMREAD_UNCHANGED);
@@ -231,6 +240,10 @@ int main(int argc, char** argv)
   cloudMsg.header.frame_id = "camera_init";
   cloudMsg.header.stamp = ros::Time::now();
   pub_fl_cloud.publish(cloudMsg);
+
+  cout<<"FL"<<endl;
+  cout<<R_FR_FL.transpose()*R_cam_FR<<endl;
+  cout<<(R_FR_FL.transpose()*(t_cam_FR-t_FR_FL)).transpose()<<endl;
 
   ros::Rate loop_rate(1);
   while(ros::ok())
