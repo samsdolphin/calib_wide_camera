@@ -202,13 +202,14 @@ private:
 class twin_tag_twin_camera_residual
 {
 public:
-  twin_tag_twin_camera_residual(VPnPData p, Camera camera) {p_ = p; camera_ = camera;}
+  twin_tag_twin_camera_residual(VPnPData p, Camera camera, Eigen::Vector3d tcam1, Eigen::Vector3d tcam2)
+  {p_ = p; camera_ = camera; tcam1_ = tcam1; tcam2_ = tcam2;}
 
   template <typename T>
   bool operator()(const T* _q, const T* _t,
                   const T* _tag1, const T* _tag2,
-                  const T* _q1, const T* _t1,
-                  const T* _q2, const T* _t2,
+                  const T* _q1,
+                  const T* _q2,
                   T* residuals) const
   {
     Eigen::Matrix<T, 3, 3> innerT = camera_.intrinsic.cast<T>();
@@ -221,10 +222,10 @@ public:
     Eigen::Matrix<T, 3, 1> delta_tag_t = R_theta(_tag1[2]).transpose() * (Eigen::Matrix<T, 3, 1>(_tag2[0]-_tag1[0], _tag2[1]-_tag1[1], T(0)));
 
     Eigen::Quaternion<T> q_cam1{_q1[3], _q1[0], _q1[1], _q1[2]};
-    Eigen::Matrix<T, 3, 1> t_cam1{_t1[0], _t1[1], _t1[2]};
+    Eigen::Matrix<T, 3, 1> t_cam1 = tcam1_.cast<T>();
 
     Eigen::Quaternion<T> q_cam2{_q2[3], _q2[0], _q2[1], _q2[2]};
-    Eigen::Matrix<T, 3, 1> t_cam2{_t2[0], _t2[1], _t2[2]};
+    Eigen::Matrix<T, 3, 1> t_cam2 = tcam2_.cast<T>();
     
     Eigen::Matrix<T, 3, 1> p_l(T(p_.p(0)), T(p_.p(1)), T(p_.p(2)));
     Eigen::Matrix<T, 3, 1> p_c = q_cam2.inverse() * q_cam1 * q_proj * delta_tag_R * p_l;
@@ -251,27 +252,29 @@ public:
     return true;
   }
   
-  static ceres::CostFunction *Create(VPnPData p, Camera camera)
+  static ceres::CostFunction *Create(VPnPData p, Camera camera, Eigen::Vector3d tcam1, Eigen::Vector3d tcam2)
   {
-    return (new ceres::NumericDiffCostFunction<twin_tag_twin_camera_residual, ceres::CENTRAL, 2, 4, 3, 3, 3, 4, 3, 4, 3>(
-      new twin_tag_twin_camera_residual(p, camera)));
+    return (new ceres::NumericDiffCostFunction<twin_tag_twin_camera_residual, ceres::CENTRAL, 2, 4, 3, 3, 3, 4, 4>(
+      new twin_tag_twin_camera_residual(p, camera, tcam1, tcam2)));
   }
 
 private:
   VPnPData p_;
   Camera camera_;
+  Eigen::Vector3d tcam1_, tcam2_;
 };
 
 /* 优化tag系到相机系的外参、相机外参、tag之间外参 */
 class single_tag_twin_camera_residual
 {
 public:
-  single_tag_twin_camera_residual(VPnPData p, Camera camera) {p_ = p; camera_ = camera;}
+  single_tag_twin_camera_residual(VPnPData p, Camera camera, Eigen::Vector3d tcam1, Eigen::Vector3d tcam2)
+  {p_ = p; camera_ = camera; tcam1_ = tcam1; tcam2_ = tcam2;}
 
   template <typename T>
   bool operator()(const T* _q, const T* _t,
-                  const T* _q1, const T* _t1,
-                  const T* _q2, const T* _t2,
+                  const T* _q1,
+                  const T* _q2,
                   T* residuals) const
   {
     Eigen::Matrix<T, 3, 3> innerT = camera_.intrinsic.cast<T>();
@@ -281,10 +284,10 @@ public:
     Eigen::Matrix<T, 3, 1> t_proj{_t[0], _t[1], _t[2]};
 
     Eigen::Quaternion<T> q_cam1{_q1[3], _q1[0], _q1[1], _q1[2]};
-    Eigen::Matrix<T, 3, 1> t_cam1{_t1[0], _t1[1], _t1[2]};
+    Eigen::Matrix<T, 3, 1> t_cam1 = tcam1_.cast<T>();
 
     Eigen::Quaternion<T> q_cam2{_q2[3], _q2[0], _q2[1], _q2[2]};
-    Eigen::Matrix<T, 3, 1> t_cam2{_t2[0], _t2[1], _t2[2]};
+    Eigen::Matrix<T, 3, 1> t_cam2 = tcam2_.cast<T>();
     
     Eigen::Matrix<T, 3, 1> p_l(T(p_.p(0)), T(p_.p(1)), T(p_.p(2)));
     Eigen::Matrix<T, 3, 1> p_c = q_cam2.inverse() * q_cam1 * q_proj * p_l;
@@ -311,15 +314,16 @@ public:
     return true;
   }
   
-  static ceres::CostFunction *Create(VPnPData p, Camera camera)
+  static ceres::CostFunction *Create(VPnPData p, Camera camera, Eigen::Vector3d tcam1, Eigen::Vector3d tcam2)
   {
-    return (new ceres::NumericDiffCostFunction<single_tag_twin_camera_residual, ceres::CENTRAL, 2, 4, 3, 4, 3, 4, 3>(
-      new single_tag_twin_camera_residual(p, camera)));
+    return (new ceres::NumericDiffCostFunction<single_tag_twin_camera_residual, ceres::CENTRAL, 2, 4, 3, 4, 4>(
+      new single_tag_twin_camera_residual(p, camera, tcam1, tcam2)));
   }
 
 private:
   VPnPData p_;
   Camera camera_;
+  Eigen::Vector3d tcam1_, tcam2_;
 };
 
 /*每个tag和tag0的外参*/
@@ -797,7 +801,7 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
 
     ceres::Solver::Options options;
     options.preconditioner_type = ceres::JACOBI;
-    options.linear_solver_type = ceres::DENSE_SCHUR;
+    options.linear_solver_type = ceres::SPARSE_SCHUR;
     options.minimizer_progress_to_stdout = false;
     options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
 
@@ -919,11 +923,13 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
       for(int j = 0; j < 4; j++)
       {
         ceres::CostFunction *cost_function;
-        cost_function = single_tag_twin_camera_residual::Create(vpnp_data[j], camera2);
+        Eigen::Vector3d tcam1(cam_ext[camera1.id*7+4], cam_ext[camera1.id*7+5], cam_ext[camera1.id*7+6]);
+        Eigen::Vector3d tcam2(cam_ext[camera2.id*7+4], cam_ext[camera2.id*7+5], cam_ext[camera2.id*7+6]);
+        cost_function = single_tag_twin_camera_residual::Create(vpnp_data[j], camera2, tcam1, tcam2);
         problem_.AddResidualBlock(cost_function, new ceres::HuberLoss(0.1),
                                   img_ext+7*img_num, img_ext+7*img_num+4, // tag系到cam1系的外参
-                                  cam_ext+camera1.id*7, cam_ext+camera1.id*7+4, // cam1的位姿
-                                  cam_ext+camera2.id*7, cam_ext+camera2.id*7+4); // cam2的位姿
+                                  cam_ext+camera1.id*7, // cam1的R
+                                  cam_ext+camera2.id*7); // cam2的R
       }
     else
     {
@@ -931,13 +937,15 @@ MarkerPair add_twin_residual(cv::Mat img1, cv::Mat img2, Camera camera1, Camera 
       for(int j = 0; j < 4; j++)
       {
         ceres::CostFunction *cost_function;
-        cost_function = twin_tag_twin_camera_residual::Create(vpnp_data[j], camera2);
+        Eigen::Vector3d tcam1(cam_ext[camera1.id*7+4], cam_ext[camera1.id*7+5], cam_ext[camera1.id*7+6]);
+        Eigen::Vector3d tcam2(cam_ext[camera2.id*7+4], cam_ext[camera2.id*7+5], cam_ext[camera2.id*7+6]);
+        cost_function = twin_tag_twin_camera_residual::Create(vpnp_data[j], camera2, tcam1, tcam2);
         problem_.AddResidualBlock(cost_function, new ceres::HuberLoss(0.1),
                                   img_ext+7*img_num, img_ext+7*img_num+4, // tag系到cam1系的外参
                                   tag_ext+3*ref_id, // ref_tag的外参
                                   tag_ext+3*cur_id, // 当前tag的外参
-                                  cam_ext+camera1.id*7, cam_ext+camera1.id*7+4, // cam1的位姿
-                                  cam_ext+camera2.id*7, cam_ext+camera2.id*7+4); // cam2的位姿
+                                  cam_ext+camera1.id*7, // cam1的位姿
+                                  cam_ext+camera2.id*7); // cam2的位姿
       }
     }
     filtered_corners2.push_back(markerCorners2[i]);
@@ -1154,7 +1162,7 @@ int main()
   {
     ceres::LocalParameterization *q_parameterization = new ceres::EigenQuaternionParameterization();
     problem.AddParameterBlock(cam_ext+7*i, 4, q_parameterization);
-    problem.AddParameterBlock(cam_ext+7*i+4, 3);
+    // problem.AddParameterBlock(cam_ext+7*i+4, 3);
   }
   if(problem.HasParameterBlock(tag_ext))
     problem.SetParameterBlockConstant(tag_ext); // 第一个tag的位姿固定

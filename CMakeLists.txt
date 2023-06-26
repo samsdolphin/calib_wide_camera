@@ -60,6 +60,10 @@ target_link_libraries(calib_aruco ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_
 add_executable(calib_aruco2 src/calib_aruco2.cpp)
 target_link_libraries(calib_aruco2 ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})
 
+# 在2的基础上相机仅优化R
+add_executable(calib_aruco3 src/calib_aruco3.cpp)
+target_link_libraries(calib_aruco3 ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})
+
 add_executable(calib_fishcam src/calib_fishcam.cpp)
 target_link_libraries(calib_fishcam ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} gtsam)
 
