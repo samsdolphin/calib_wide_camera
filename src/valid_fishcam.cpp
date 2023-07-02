@@ -117,32 +117,35 @@ int main(int argc, char** argv)
   bl_coef = (cv::Mat_<double>(1, 4) << 0.000413327, -0.017352, 0.0175895, -0.0110053);
 
   /* 单相机雷达标定计算出来的 */
-  Eigen::Matrix3d R_cam_FR;
-  // R_cam_FR << -0.999998,0.00172306,-0.000316029,
+  Eigen::Matrix3d R_FR_L;
+  // R_FR_L << -0.999998,0.00172306,-0.000316029,
   //             -0.00032462,-0.0049878,0.999988,
   //             0.00172146,0.999986,0.00498835; // pixel multi
-  R_cam_FR << -0.999997,0.00218138,-0.000696373,
+  R_FR_L << -0.999997,0.00218138,-0.000696373,
               -0.000706872,-0.00481575,0.999988,
               0.002178,0.999986,0.00481727; // mlcc multi
-  Eigen::Vector3d t_cam_FR(0.0695, 0.06885, -0.0765);
+  // R_FR_L << -1, 0, 0,
+  //           0, 0, 1,
+  //           0, 1, 0; // cad
+  Eigen::Vector3d t_FR_L(0.0695, 0.06885, -0.0765);
 
-  Eigen::Matrix3d R_cam_BR;
-  R_cam_BR << -0.00292249,-0.999975,-0.00640057,
+  Eigen::Matrix3d R_BR_L;
+  R_BR_L << -0.00292249,-0.999975,-0.00640057,
               -0.00351924,-0.00639028,0.999973,
               -0.99999,0.00294494,-0.00350047;
-  Eigen::Vector3d t_cam_BR(0.0165, 0.06885, -0.1256);
+  Eigen::Vector3d t_BR_L(0.0165, 0.06885, -0.1256);
 
-  Eigen::Matrix3d R_cam_BL;
-  R_cam_BL << 0.00320279,0.999988,-0.00358299,
+  Eigen::Matrix3d R_BL_L;
+  R_BL_L << 0.00320279,0.999988,-0.00358299,
               -0.00243658,0.00359082,0.999991,
               0.999992,-0.00319402,0.00244806;
-  Eigen::Vector3d t_cam_BL(0.045, 0.06885, -0.1256);
+  Eigen::Vector3d t_BL_L(0.045, 0.06885, -0.1256);
 
-  Eigen::Matrix3d R_cam_FL;
-  R_cam_FL << 0.999999,0.000581546,-0.00131777,
+  Eigen::Matrix3d R_FL_L;
+  R_FL_L << 0.999999,0.000581546,-0.00131777,
               0.00131295,0.00821088,0.999965,
               0.000592346,-0.999966,0.00821011;
-  Eigen::Vector3d t_cam_FL(0, 0.06885, -0.1256);
+  Eigen::Vector3d t_FL_L(0, 0.06885, -0.1256);
 
   /* 重投影误差计算出来的 */
   Eigen::Matrix3d R_FR_BL, R_FR_FL, R_FR_BR;
@@ -172,11 +175,11 @@ int main(int argc, char** argv)
   cout<<"push enter"<<endl;
   getchar();
   cv::Mat input_img = cv::imread("/media/sam/CR7/20230613_shenzhen_rosbag/calib_fishcam/fr.png", cv::IMREAD_UNCHANGED);
-  color_cloud(fr_intrinsic, fr_coef, input_img, R_cam_FR, t_cam_FR, lidar_cloud, rgb_cloud);
+  color_cloud(fr_intrinsic, fr_coef, input_img, R_FR_L, t_FR_L, lidar_cloud, rgb_cloud);
   
   cout<<"FR"<<endl;
-  cout<<R_cam_FR<<endl;
-  cout<<t_cam_FR.transpose()<<endl;
+  cout<<R_FR_L<<endl;
+  cout<<t_FR_L.transpose()<<endl;
 
   sensor_msgs::PointCloud2 cloudMsg;
   pcl::toROSMsg(*rgb_cloud, cloudMsg);
@@ -188,9 +191,9 @@ int main(int argc, char** argv)
   getchar();
   input_img = cv::imread("/media/sam/CR7/20230613_shenzhen_rosbag/calib_fishcam/bl.png", cv::IMREAD_UNCHANGED);
   #ifdef COLOR_EACH_CAMERA
-  color_cloud(bl_intrinsic, bl_coef, input_img, R_cam_BL, t_cam_BL, lidar_cloud, rgb_cloud);
+  color_cloud(bl_intrinsic, bl_coef, input_img, R_BL_L, t_BL_L, lidar_cloud, rgb_cloud);
   #else
-  color_cloud(bl_intrinsic, bl_coef, input_img, R_FR_BL.transpose()*R_cam_FR, R_FR_BL.transpose()*(t_cam_FR-t_FR_BL), lidar_cloud, rgb_cloud);
+  color_cloud(bl_intrinsic, bl_coef, input_img, R_FR_BL.transpose()*R_FR_L, R_FR_BL.transpose()*(t_FR_L-t_FR_BL), lidar_cloud, rgb_cloud);
   #endif
   pcl::toROSMsg(*rgb_cloud, cloudMsg);
   cloudMsg.header.frame_id = "camera_init";
@@ -198,16 +201,16 @@ int main(int argc, char** argv)
   pub_bl_cloud.publish(cloudMsg);
 
   cout<<"BL"<<endl;
-  cout<<R_FR_BL.transpose()*R_cam_FR<<endl;
-  cout<<(R_FR_BL.transpose()*(t_cam_FR-t_FR_BL)).transpose()<<endl;
+  cout<<R_FR_BL.transpose()*R_FR_L<<endl;
+  cout<<(R_FR_BL.transpose()*(t_FR_L-t_FR_BL)).transpose()<<endl;
 
   cout<<"push enter"<<endl;
   getchar();
   input_img = cv::imread("/media/sam/CR7/20230613_shenzhen_rosbag/calib_fishcam/br.png", cv::IMREAD_UNCHANGED);
   #ifdef COLOR_EACH_CAMERA
-  color_cloud(br_intrinsic, br_coef, input_img, R_cam_BR, t_cam_BR, lidar_cloud, rgb_cloud);
+  color_cloud(br_intrinsic, br_coef, input_img, R_BR_L, t_BR_L, lidar_cloud, rgb_cloud);
   #else
-  color_cloud(br_intrinsic, br_coef, input_img, R_FR_BR.transpose()*R_cam_FR, R_FR_BR.transpose()*(t_cam_FR-t_FR_BR), lidar_cloud, rgb_cloud);
+  color_cloud(br_intrinsic, br_coef, input_img, R_FR_BR.transpose()*R_FR_L, R_FR_BR.transpose()*(t_FR_L-t_FR_BR), lidar_cloud, rgb_cloud);
   #endif
   pcl::toROSMsg(*rgb_cloud, cloudMsg);
   cloudMsg.header.frame_id = "camera_init";
@@ -215,16 +218,16 @@ int main(int argc, char** argv)
   pub_br_cloud.publish(cloudMsg);
 
   cout<<"BR"<<endl;
-  cout<<R_FR_BR.transpose()*R_cam_FR<<endl;
-  cout<<(R_FR_BR.transpose()*(t_cam_FR-t_FR_BR)).transpose()<<endl;
+  cout<<R_FR_BR.transpose()*R_FR_L<<endl;
+  cout<<(R_FR_BR.transpose()*(t_FR_L-t_FR_BR)).transpose()<<endl;
 
   cout<<"push enter"<<endl;
   getchar();
   input_img = cv::imread("/media/sam/CR7/20230613_shenzhen_rosbag/calib_fishcam/fl.png", cv::IMREAD_UNCHANGED);
   #ifdef COLOR_EACH_CAMERA
-  color_cloud(fl_intrinsic, fl_coef, input_img, R_cam_FL, t_cam_FL, lidar_cloud, rgb_cloud);
+  color_cloud(fl_intrinsic, fl_coef, input_img, R_FL_L, t_FL_L, lidar_cloud, rgb_cloud);
   #else
-  color_cloud(fl_intrinsic, fl_coef, input_img, R_FR_FL.transpose()*R_cam_FR, R_FR_FL.transpose()*(t_cam_FR-t_FR_FL), lidar_cloud, rgb_cloud);
+  color_cloud(fl_intrinsic, fl_coef, input_img, R_FR_FL.transpose()*R_FR_L, R_FR_FL.transpose()*(t_FR_L-t_FR_FL), lidar_cloud, rgb_cloud);
   #endif
   pcl::toROSMsg(*rgb_cloud, cloudMsg);
   cloudMsg.header.frame_id = "camera_init";
@@ -232,8 +235,8 @@ int main(int argc, char** argv)
   pub_fl_cloud.publish(cloudMsg);
 
   cout<<"FL"<<endl;
-  cout<<R_FR_FL.transpose()*R_cam_FR<<endl;
-  cout<<(R_FR_FL.transpose()*(t_cam_FR-t_FR_FL)).transpose()<<endl;
+  cout<<R_FR_FL.transpose()*R_FR_L<<endl;
+  cout<<(R_FR_FL.transpose()*(t_FR_L-t_FR_FL)).transpose()<<endl;
 
   ros::Rate loop_rate(1);
   while(ros::ok())

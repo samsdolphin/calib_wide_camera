@@ -324,7 +324,7 @@ private:
 
 /*每个tag和tag0的外参*/
 double tag_ext[3*TOTAL_TAG_NUM];
-double img_ext[7*31]; // 前16是单相机位姿，后16是相机对的位姿
+double img_ext[7*32]; // 前16是单相机位姿，后16是相机对的位姿
 double cam_ext[7*4];
 
 void debug_camera(cv::Mat inputImage, Camera camera)
@@ -971,6 +971,9 @@ void calculate_reprojection_err(cv::Mat inputImage, Camera camera, MarkerPair ma
   double res = 0;
   for(int i = 0; i < markerIds.size(); i++)
   {
+    for(int j = 0; j < markerCorners[i].size(); j++)
+      cv::circle(outputImage, markerCorners[i][j], 3, cv::Scalar(0, 255, 0), -1);
+    
     int cur_id = markerIds[i];
     // cout<<"cur id "<<cur_id<<endl;
     Eigen::Matrix3d new_R = R0.transpose()*R_theta(tag_ext[cur_id*3+2]);
@@ -1022,6 +1025,10 @@ void calculate_twin_reprojection_err(cv::Mat inputImage, Camera camera, MarkerPa
   vector<vector<cv::Point2f>>& markerCorners = marker_pair.marker_corners;
   cv::Mat& fisheye_cammatix = camera.cv_intrinsic;
   cv::Mat& fisheye_distcoe = camera.cv_distortion;
+
+  for(int i = 0; i < markerCorners.size(); i++)
+    for(int j = 0; j < markerCorners[i].size(); j++)
+      cv::circle(outputImage, markerCorners[i][j], 3, cv::Scalar(0, 255, 0), -1);
 
   /* 验证优化后的初始值重投影误差 */
   Eigen::Matrix3d R0 = R_theta(tag_ext[ref_id*3+2]);
@@ -1310,7 +1317,7 @@ int main()
     calculate_reprojection_err(inputImage, cameras[3], marker_pairs[i], reproj_err);
   }
 
-  cout<<"avg re-proj err "<<reproj_err/31<<endl;
+  cout<<"avg re-proj err "<<reproj_err/32<<endl;
 
   // Eigen::Matrix3d R0 = R_theta(tag_ext[0*3+2]);
   // Eigen::Vector3d t0(tag_ext[0*3], tag_ext[0*3+1], 0);
