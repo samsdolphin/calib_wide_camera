@@ -30,7 +30,7 @@ using namespace Eigen;
 
 bool exit_flag = false;
 int pc_cnt = 0, msg_cnt = 0;
-string in_datapath = "/media/sam/CR7/huawei/centennial/";
+string in_datapath = "/media/sam/LiT7/data/fba/new_device/calib/ex_1/";
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr pc(new pcl::PointCloud<pcl::PointXYZI>);
 
@@ -83,21 +83,21 @@ void lidar_callback(const sensor_msgs::PointCloud2::ConstPtr& msg)
   }
 }
 
-// void avia_callback(const livox_ros_driver::CustomMsg::ConstPtr& msg)
-// {
-//   pcl::PointCloud<PointType>::Ptr _pc(new pcl::PointCloud<PointType>);
-//   size_t pc_size = msg->point_num;
-//   _pc->points.resize(pc_size);
-//   for(size_t i = 0; i < pc_size; i++)
-//   {
-//     _pc->points[i].x = msg->points[i].x;
-//     _pc->points[i].y = msg->points[i].y;
-//     _pc->points[i].z = msg->points[i].z;
-//   }
-//   pc = mypcl::append_cloud(pc, *_pc);
-//   msg_cnt++;
-//   ROS_INFO_STREAM("pc size "<<pc->points.size()<<" "<<msg_cnt);
-// }
+void avia_callback(const livox_ros_driver::CustomMsg::ConstPtr& msg)
+{
+  pcl::PointCloud<PointType>::Ptr _pc(new pcl::PointCloud<PointType>);
+  size_t pc_size = msg->point_num;
+  _pc->points.resize(pc_size);
+  for(size_t i = 0; i < pc_size; i++)
+  {
+    _pc->points[i].x = msg->points[i].x;
+    _pc->points[i].y = msg->points[i].y;
+    _pc->points[i].z = msg->points[i].z;
+  }
+  pc = mypcl::append_cloud(pc, *_pc);
+  msg_cnt++;
+  ROS_INFO_STREAM("pc size "<<pc->points.size()<<" "<<msg_cnt);
+}
 
 void hesai_callback(const sensor_msgs::PointCloud2::ConstPtr& msg)
 {
@@ -122,8 +122,8 @@ int main(int argc, char** argv)
 
   // ros::Subscriber sub_points = nh.subscribe("/velodyne_points", 1000, lidar_callback);
   // ros::Subscriber sub_points = nh.subscribe("/os1_cloud_node/points", 1000, lidar_callback);
-  // ros::Subscriber sub_points = nh.subscribe("/livox/lidar", 1000, avia_callback);
-  ros::Subscriber sub_points = nh.subscribe("//hesai/pandar_points", 1000, hesai_callback);
+  ros::Subscriber sub_points = nh.subscribe("/livox/lidar", 1000, avia_callback);
+  // ros::Subscriber sub_points = nh.subscribe("//hesai/pandar_points", 1000, hesai_callback);
 
   // pcl::io::savePCDFileBinary(in_datapath + "0.pcd", *pc);
 
@@ -132,7 +132,7 @@ int main(int argc, char** argv)
   {
     ros::spinOnce();
     loop_rate.sleep();
-    if(msg_cnt == 1)
+    if(msg_cnt == 47)
     {
       pcl::io::savePCDFileBinary(in_datapath + "0.pcd", *pc);
       break;
