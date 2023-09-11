@@ -44,11 +44,11 @@ target_link_libraries(bag2img ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBR
 add_executable(bag2pcd src/bag2pcd.cpp)
 target_link_libraries(bag2pcd ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
-add_executable(localba src/localba.cpp)
-target_link_libraries(localba ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+# add_executable(localba src/localba.cpp)
+# target_link_libraries(localba ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
-add_executable(vis src/visualize.cpp)
-target_link_libraries(vis ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+# add_executable(vis src/visualize.cpp)
+# target_link_libraries(vis ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
-add_executable(comb_imu src/comb_imu.cpp)
-target_link_libraries(comb_imu ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+# add_executable(comb_imu src/comb_imu.cpp)
+# target_link_libraries(comb_imu ${catkin_LIBRARIES} ${PCL_LIBRARIES})

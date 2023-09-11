@@ -6,6 +6,7 @@
 #include <rosbag/bag.h>
 #include <rosbag/view.h>
 #include <sensor_msgs/Image.h>
+#include <sensor_msgs/CompressedImage.h>
 #include <opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.h>
 // #include <cv.h>
@@ -15,6 +16,7 @@ using namespace std;
 using namespace cv;
 
 string bag_path, write_path, topic_name;
+bool isCompressed;
 
 void bag2img()
 {
@@ -23,29 +25,39 @@ void bag2img()
   {
     bag.open(bag_path, rosbag::bagmode::Read);
   }
-  catch(rosbag::BagException e)
+  catch (rosbag::BagException e)
   {
     ROS_ERROR_STREAM("LOADING BAG FAILED: " << e.what());
     return;
   }
-  
+
   std::vector<string> img_topic;
   img_topic.push_back(topic_name);
   rosbag::View img_view(bag, rosbag::TopicQuery(img_topic));
-  int cnt = 0, img_cnt = 0;
+  int msg_cnt = 0, img_cnt = 0;
   cv::Mat rgb_img;
-  for(const rosbag::MessageInstance &m: img_view)
+  for (const rosbag::MessageInstance& m : img_view)
   {
-    cnt++;
-    // if(cnt < 90 || cnt > 1060) continue;
-    sensor_msgs::Image image;
-    image = *(m.instantiate<sensor_msgs::Image>()); // message type
-    cv_bridge::CvImagePtr img_ptr = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::BGR8);
-    img_ptr->image.copyTo(rgb_img);
-    cv::imwrite(write_path + to_string(img_cnt) + ".png", rgb_img);
-    img_cnt++;
+    if (isCompressed && msg_cnt % 10 == 0)
+    {
+      sensor_msgs::CompressedImage::ConstPtr compressedImage = m.instantiate<sensor_msgs::CompressedImage>();
+      cv::Mat image = cv::imdecode(cv::Mat(compressedImage->data), cv::IMREAD_COLOR);
+      std::string outputFilePath = write_path + to_string(img_cnt) + ".png";
+      cv::imwrite(outputFilePath, image);
+      img_cnt++;
+    }
+    else if(!isCompressed && msg_cnt % 10 == 0)
+    {
+      sensor_msgs::Image image;
+      image = *(m.instantiate<sensor_msgs::Image>()); // message type
+      cv_bridge::CvImagePtr img_ptr = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::BGR8);
+      img_ptr->image.copyTo(rgb_img);
+      cv::imwrite(write_path + to_string(img_cnt) + ".png", rgb_img);
+      img_cnt++;
+    }
+    msg_cnt++;
   }
-  cout<<"complete"<<endl;
+  cout << "complete" << endl;
 }
 
 int main(int argc, char** argv)
@@ -53,10 +65,12 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "bag2img");
   ros::NodeHandle nh("~");
 
+
   nh.getParam("bag_path", bag_path);
   nh.getParam("write_path", write_path);
   nh.getParam("topic_name", topic_name);
-  
+  nh.getParam("isCompressed", isCompressed);
+
   bag2img();
   // cv::Mat image = cv::imread("/media/sam/CR7/huawei/intrinsic/fr/test/101.png");
   // cv::Mat imageUndistorted;
@@ -78,11 +92,11 @@ int main(int argc, char** argv)
   // imshow("win1", image);
   // imshow("win2", imageUndistorted);
   // waitKey(0);
-	// destroyWindow("win1");
+  // destroyWindow("win1");
   // destroyWindow("win2");
 
-  ros::Rate loop_rate(1);
-  while(ros::ok())
+  ros::Rate loop_rate(100);
+  while (ros::ok())
   {
     ros::spinOnce();
     loop_rate.sleep();
